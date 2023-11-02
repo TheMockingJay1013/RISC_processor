@@ -4,7 +4,7 @@
 
 
 
-module CPU #(parameter WIDTH=32, parameter MEM_SIZE=1024,parameter PC_SIZE=10)
+module CPU #(parameter WIDTH=32, parameter MEM_SIZE=1024,parameter PC_SIZE=32)
 (
     input clk ,
     input rst ,
@@ -84,7 +84,7 @@ reg program_control_op;
 
 reg [WIDTH-1 :0] Immediate ;                           // for storing the sign extended value of imm1 or imm2 based on the instruction 
 
-
+reg [WIDTH-1 : 0] LMD ;                                // taking the data read from memory
 
 /*----------------------------------------------------------------------------------------------------------------*/
 
@@ -118,7 +118,7 @@ reg [WIDTH-1:0] ALU_out;
 reg MUXALU1_sel;
 wire [WIDTH-1:0] MUXALU1_out;
 
-MUX_2x1 MUXALU1 (clk, MUXALU1_sel, A, NPC , MUXALU1_out);
+MUX_2x1 MUXALU1 (clk, MUXALU1_sel, A, PC , MUXALU1_out);
 assign op1 = MUXALU1_out;
 
 
@@ -128,6 +128,11 @@ wire [WIDTH-1:0] MUXALU2_out;
 
 MUX_2x1 MUXALU2 (clk, MUXALU2_sel, B, Immediate , MUXALU2_out);
 assign op2 = MUXALU2_out;
+
+//CONDITION check module
+reg [1:0] cond ;
+wire cond_out ;
+condition_check(A,cond,cond_out);
 
 /*----------------------------------------------------------------------------------------------------------------*/
 
@@ -165,7 +170,7 @@ begin
         DECODE :
             begin
                 case(opcode)
-                    3'b000 : begin
+                    3'b000 : begin                                                         // ALU instruction 
                                 funct = IR[4:0];
                                 rs = IR[28:25];
                                 rt = IR[24:21];
@@ -190,9 +195,95 @@ begin
 
                                 MUXALU1_sel = 0;
                                 MUXALU2_sel = funct[4];
-                                state = EXECUTE;
+                                alu_op = funct[2:0] ;
                             end
+                    3'b001 :                                                              // load store instruction 
+                        begin
+                            funct=IR[4:0]
+                            rs = IR[28:25];
+                            rt = IR[24:21];
+                            Imm1 = IR[20:5];
+                            if(Imm1[15] == 1)
+                                Immediate = {16'b1111111111111111,Imm1};
+                            else
+                                Immediate = {16'b0000000000000000,Imm1};
+
+                            // accessing from reg bank 
+                            read_port_1 = 1 ;
+                            read_port_2 = 1 ;
+                            addr_port_1 = rs ;
+                            A = (funct[2]==0) ? :dout_port_1 : SP ;
+                            B =(funct[2]==0) ? :dout_port_2 : SP ;
+                            MUXALU1_sel = 0;
+                            MUXALU2_sel = 1;
+                            alu_op = 0 ;
+
+                        end
+                    3'b010 :                                                          // branch instr
+                        begin
+                            funct2 = IR[1:0];
+                            rs= IR[28:25];
+                            Imm2 = IR[24:2];
+                            if(Imm2[22] == 1)
+                                Immediate = {9'b111111111,Imm2};
+                            else
+                                Immediate = {9'b000000000,Imm2};
+
+                            read_port_1 =1;
+                            addr_port_1 = rs ;
+                            A = dout_port_1 ;
+
+                            MUXALU1_sel  = 1;
+                            MUXALU2_sel = 1 ;
+                            alu_op = 0;
+                    
+
+                    
+                        end
+                    3'b011 :                                                      // stack 
+                        begin
+                            
+
+                        end
+                    
+                    3'b100 :                                                        // move instr
+                        begin
+                            rs = IR[28:25];
+                            rt = IR[24:21];
+
+                            Immediate = 0;
+
+                            read_port_1 =1 ;
+                            addr_port_1 = rs ;
+
+                            A = dout_port_1 ;
+
+                            alu_op = 0;
+                            MUXALU1_sel = 0;
+                            MUXALU2_sel =1;
+                        end
+                    
+                    3'b110:                                                      // Stack ALU 
+                        begin
+                            funct = IR[4:0];
+                            Imm1 = IR[20:5];
+
+                            // sign extend imm1 and store in immediate
+                            if(Imm1[15] == 1)
+                                Immediate = {16'b1111111111111111,Imm1};
+                            else
+                                Immediate = {16'b0000000000000000,Imm1};
+
+                            A = SP ;
+
+                            MUXALU1_sel = 0;
+                            MUXALU2_sel = 1;
+                            alu_op = funct[3:0] ;
+                        end
+
                 endcase
+
+                state = EXECUTE;
             end
         EXECUTE :
             begin
@@ -202,9 +293,39 @@ begin
                     3'b000 :
                         begin
                             ALU_out = result;
-                            state = MEMORY;
                         end
+
+                    3'b001 :
+                        begin
+                            ALU_out = result ;
+                        end
+
+                    3'b010 :
+                        begin
+                            ALU_out = result ;
+                            cond = funct2 ;
+
+
+                        end
+                    3'b011:
+                        begin
+                            
+                        end
+                    
+                    3'b100 :
+                        begin
+                            ALU_out = result;
+                        end
+                    
+                    3'b110 :
+                        begin
+                            ALU_out = result;
+                        end
+
+
                 endcase
+                
+                state = MEMORY;
             end
         
         MEMORY :
@@ -213,9 +334,60 @@ begin
                     3'b000 :
                         begin
                             PC = NPC;
-                            state = WRITEBACK;
                         end
+                    
+                    3'b001 :
+                        begin
+                            case(funct[1:0])
+                                2'b00 :
+                                    begin
+                                        LMD = memory[ALU_out];
+                                    end
+                                2'b01:
+                                    begin
+                                        memory[ALU_out] = B ;
+                                    end
+                                2'b10 :
+                                    begin
+                                        LMD = memory[ALU_out];
+                                    end
+                                2'b11:
+                                    begin
+                                        memory[ALU_out] = B ;
+                                    end
+
+                            endcase
+                            PC = NPC ;
+                        end
+
+                    3'b010 :
+                        begin
+                            if(cond_out)
+                                begin
+                                    PC = ALU_out ;
+                                end
+                            else 
+                                begin
+                                    PC = NPC;
+                                end
+                        end
+                    3'b011:
+                        begin
+
+                        end
+                    
+                    3'b100 :
+                        begin
+                            PC = NPC;
+                        end
+
+                    3'b110 :
+                        begin
+                            PC = NPC;
+                        end
+                    
                 endcase
+                state = WRITEBACK;
             end
         WRITEBACK :
             begin
@@ -225,9 +397,39 @@ begin
                             write_port = 1;
                             addr_port_write = (funct[4])? rt : rd;
                             din_port_write = ALU_out;
-                            state = FETCH;
+                        end
+                    3'b001:
+                        begin
+                            case(funct[1:0])
+                                2'b00 : 
+                                    begin
+                                        write_port =1 ;
+                                        addr_port_write = rt ;
+                                        din_port_write = LMD ;
+                                    end
+
+                                2'b10 : 
+                                    begin
+                                        write_port =1 ;
+                                        addr_port_write = rt ;
+                                        din_port_write = LMD ;
+                                    end
+                            endcase
+
+                        end
+                    
+                    3'b100 :
+                        begin
+                            write_port = 1;
+                            addr_port_write = rt ;
+                            din_port_write = ALU_out;
+                        end
+                    3'b110 :
+                        begin
+                            SP = ALU_out;
                         end
                 endcase
+                state = FETCH ;
             end
     endcase
 end
