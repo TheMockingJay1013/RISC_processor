@@ -4,7 +4,7 @@
 
 
 
-module CPU #(parameter WIDTH=32, parameter MEM_SIZE=256,parameter PC_SIZE=8)
+module CPU #(parameter WIDTH=32, parameter MEM_SIZE=1024,parameter PC_SIZE=10)
 (
     input clk ,
     input rst ,
@@ -40,6 +40,8 @@ assign opcode = IR[31:29];
 
 // ALU instruction 
 // uses rs ,rt and rd for register values
+//uses imm1 for immediate value
+//uses funct for the type of ALU instruction
 reg [4:0] funct ;
 
 /* Load and store instructions 
@@ -116,6 +118,16 @@ reg [WIDTH-1:0] ALU_out;
 reg MUXALU1_sel;
 wire [WIDTH-1:0] MUXALU1_out;
 
+MUX_2x1 MUXALU1 (clk, MUXALU1_sel, A, NPC , MUXALU1_out);
+assign op1 = MUXALU1_out;
+
+
+//MUXALU2
+reg MUXALU2_sel;
+wire [WIDTH-1:0] MUXALU2_out;
+
+MUX_2x1 MUXALU2 (clk, MUXALU2_sel, B, Immediate , MUXALU2_out);
+assign op2 = MUXALU2_out;
 
 /*----------------------------------------------------------------------------------------------------------------*/
 
@@ -125,7 +137,7 @@ wire [WIDTH-1:0] MUXALU1_out;
 parameter FETCH=0,DECODE=1,EXECUTE=2, MEMORY=3,WRITEBACK=4;
 
 // state register
-reg [2:0] state,next_state;
+reg [2:0] state;
 
 /*----------------------------------------------------------------------------------------------------------------*/
 
@@ -144,8 +156,10 @@ begin
     case(state)
         FETCH : 
             begin
+                write_port = 0;
                 IR = memory[PC];
                 NPC = PC + 1;
+                state = DECODE;
             end
 
         DECODE :
@@ -174,23 +188,46 @@ begin
                                 write_port = 0;
                                 addr_port_write = 0;
 
-
-                                
+                                MUXALU1_sel = 0;
+                                MUXALU2_sel = funct[4];
+                                state = EXECUTE;
                             end
                 endcase
             end
         EXECUTE :
             begin
-
+                read_port_1 = 0;
+                read_port_2 = 0;
+                case(opcode)
+                    3'b000 :
+                        begin
+                            ALU_out = result;
+                            state = MEMORY;
+                        end
+                endcase
             end
         
         MEMORY :
             begin
-
+                case(opcode)
+                    3'b000 :
+                        begin
+                            PC = NPC;
+                            state = WRITEBACK;
+                        end
+                endcase
             end
         WRITEBACK :
             begin
-
+                case(opcode)
+                    3'b000 :
+                        begin
+                            write_port = 1;
+                            addr_port_write = (funct[4])? rt : rd;
+                            din_port_write = ALU_out;
+                            state = FETCH;
+                        end
+                endcase
             end
     endcase
 end
