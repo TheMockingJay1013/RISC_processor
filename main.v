@@ -3,15 +3,45 @@
 `include "datapath_modules.v"
 
 
+// module memory #(parameter WIDTH=32, parameter MEM_SIZE=1024)
+// (
+//     input clk ,
+//     input rst ,
+//     input [WIDTH-1:0] din ,
+//     input [MEM_SIZE-1:0] addr ,
+//     input writemem ,
+//     output [WIDTH-1:0] dout
+// );
+
+// reg [WIDTH-1:0] memory [0:MEM_SIZE-1] ;
+
+// assign dout = (writemem == 1'b0) ? memory[addr] : 0;
+
+// always @(posedge clk)
+// begin
+//     if(rst)
+//         begin
+//             memory[addr] <= 0;
+//         end
+//     else if(write)
+//         begin
+//             memory[addr] <= din;
+//         end
+// end
+
+// endmodule
+
 
 module CPU #(parameter WIDTH=32, parameter MEM_SIZE=1024,parameter PC_SIZE=32)
 (
     input clk ,
     input rst ,
-    input [WIDTH-1:0] memory [0:MEM_SIZE-1] ,
+    input halt_button ,
+    input [WIDTH-1:0] memory [0:MEM_SIZE-1] 
 
-);
+); 
 
+reg [WIDTH-1:0] data_memory [0:MEM_SIZE-1] ;
 // stack pointer
 reg [PC_SIZE-1:0] SP;
 
@@ -86,6 +116,7 @@ reg [WIDTH-1 :0] Immediate ;                           // for storing the sign e
 
 reg [WIDTH-1 : 0] LMD ;                                // taking the data read from memory
 
+
 /*----------------------------------------------------------------------------------------------------------------*/
 
 
@@ -118,7 +149,7 @@ reg [WIDTH-1:0] ALU_out;
 reg MUXALU1_sel;
 wire [WIDTH-1:0] MUXALU1_out;
 
-MUX_2x1 MUXALU1 (clk, MUXALU1_sel, A, PC , MUXALU1_out);
+MUX_2x1 MUXALU1 ( MUXALU1_sel, A, PC , MUXALU1_out);
 assign op1 = MUXALU1_out;
 
 
@@ -126,20 +157,20 @@ assign op1 = MUXALU1_out;
 reg MUXALU2_sel;
 wire [WIDTH-1:0] MUXALU2_out;
 
-MUX_2x1 MUXALU2 (clk, MUXALU2_sel, B, Immediate , MUXALU2_out);
+MUX_2x1 MUXALU2 ( MUXALU2_sel, B, Immediate , MUXALU2_out);
 assign op2 = MUXALU2_out;
 
 //CONDITION check module
 reg [1:0] cond ;
 wire cond_out ;
-condition_check(A,cond,cond_out);
+condition_check checker(A,cond,cond_out);
 
 /*----------------------------------------------------------------------------------------------------------------*/
 
 // parameters for the 5 states of the CPU
 /*----------------------------------------------------------------------------------------------------------------*/
 
-parameter FETCH=0,DECODE=1,EXECUTE=2, MEMORY=3,WRITEBACK=4;
+parameter FETCH=0,DECODE=1,EXECUTE=2, MEMORY=3,WRITEBACK=4,TERMINATION=5;
 
 // state register
 reg [2:0] state;
@@ -158,6 +189,11 @@ initial
 // state transition logic
 always @(posedge clk)
 begin
+    if(rst)
+        begin
+            state = FETCH;
+            PC = 0;
+        end
     case(state)
         FETCH : 
             begin
@@ -199,7 +235,7 @@ begin
                             end
                     3'b001 :                                                              // load store instruction 
                         begin
-                            funct=IR[4:0]
+                            funct=IR[4:0];
                             rs = IR[28:25];
                             rt = IR[24:21];
                             Imm1 = IR[20:5];
@@ -212,8 +248,8 @@ begin
                             read_port_1 = 1 ;
                             read_port_2 = 1 ;
                             addr_port_1 = rs ;
-                            A = (funct[2]==0) ? :dout_port_1 : SP ;
-                            B =(funct[2]==0) ? :dout_port_2 : SP ;
+                            A = (funct[2]==0) ? dout_port_1 : SP ;
+                            B =(funct[2]==0) ? dout_port_2 : SP ;
                             MUXALU1_sel = 0;
                             MUXALU2_sel = 1;
                             alu_op = 0 ;
@@ -262,6 +298,15 @@ begin
                             MUXALU1_sel = 0;
                             MUXALU2_sel =1;
                         end
+                    3'b101:
+                        begin
+                            program_control_op = IR[28];
+                            Immediate = 0;
+                            alu_op = 0;
+                            MUXALU1_sel = 0;
+                            MUXALU2_sel = 1;
+
+                        end
                     
                     3'b110:                                                      // Stack ALU 
                         begin
@@ -280,10 +325,16 @@ begin
                             MUXALU2_sel = 1;
                             alu_op = funct[3:0] ;
                         end
+                    3'b111 :
+                        begin
+                            state = TERMINATION;
+                        end
 
                 endcase
 
                 state = EXECUTE;
+                if(opcode == 3'b101 && program_control_op == 1 && halt_button == 1)
+                    state = DECODE;
             end
         EXECUTE :
             begin
@@ -341,19 +392,19 @@ begin
                             case(funct[1:0])
                                 2'b00 :
                                     begin
-                                        LMD = memory[ALU_out];
+                                        LMD = data_memory[ALU_out];
                                     end
                                 2'b01:
                                     begin
-                                        memory[ALU_out] = B ;
+                                        data_memory[ALU_out] = B ;
                                     end
                                 2'b10 :
                                     begin
-                                        LMD = memory[ALU_out];
+                                        LMD = data_memory[ALU_out];
                                     end
                                 2'b11:
                                     begin
-                                        memory[ALU_out] = B ;
+                                        data_memory[ALU_out] = B ;
                                     end
 
                             endcase
@@ -377,6 +428,11 @@ begin
                         end
                     
                     3'b100 :
+                        begin
+                            PC = NPC;
+                        end
+                    
+                    3'b101 :
                         begin
                             PC = NPC;
                         end
@@ -430,6 +486,10 @@ begin
                         end
                 endcase
                 state = FETCH ;
+            end
+        TERMINATION :
+            begin
+                state = TERMINATION;
             end
     endcase
 end
