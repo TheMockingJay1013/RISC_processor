@@ -15,10 +15,11 @@ always @(posedge clk) begin
 
     if (rout2) dout2 <= data;
     else dout2 <= 32'bz;
+
 end
 
 initial begin
-    data <= 0;
+    data <= 1;
 end
 
 endmodule

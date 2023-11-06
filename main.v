@@ -36,11 +36,10 @@ module CPU #(parameter WIDTH=32, parameter MEM_SIZE=1024,parameter PC_SIZE=32)
 (
     input clk ,
     input rst ,
-    input halt_button ,
-    input [WIDTH-1:0] memory [0:MEM_SIZE-1] 
-
+    input halt_button 
 ); 
 
+reg [WIDTH-1:0] memory [0:MEM_SIZE-1] ;
 reg [WIDTH-1:0] data_memory [0:MEM_SIZE-1] ;
 // stack pointer
 reg [PC_SIZE-1:0] SP;
@@ -122,14 +121,17 @@ reg [WIDTH-1 : 0] LMD ;                                // taking the data read f
 
 // The Modules Instantiation and declaration of required control signals
 /*----------------------------------------------------------------------------------------------------------------*/
-
+reg clk2;
 // register bank
 reg read_port_1, read_port_2, write_port;
 reg [3:0] addr_port_1, addr_port_2, addr_port_write;
 reg [WIDTH-1:0] din_port_write;
 wire [WIDTH-1:0] dout_port_1, dout_port_2;
 
-register_bank RB (clk, read_port_1, read_port_2, write_port, addr_port_1, addr_port_2, addr_port_write, din_port_write, dout_port_1, dout_port_2);
+
+
+register_bank RB (clk2, read_port_1, read_port_2, write_port, addr_port_1, addr_port_2, addr_port_write, din_port_write, dout_port_1, dout_port_2);
+
 
 
 // ALU
@@ -138,7 +140,7 @@ wire [WIDTH-1:0] op1, op2;
 reg [3:0] alu_op;
 wire [WIDTH-1:0] result;
 
-ALUtoplevel DUTALU(clk, op1, op2, alu_op, result );
+ALUtoplevel DUTALU(clk2, op1, op2, alu_op, result );
 
 //register for storing ALU result 
 reg [WIDTH-1:0] ALU_out;
@@ -177,16 +179,24 @@ reg [2:0] state;
 
 /*----------------------------------------------------------------------------------------------------------------*/
 
-
+always forever begin
+    #5 clk2 = ~clk2;
+end
 
 initial
     begin
+        clk2 = 0;
         state = FETCH;
         PC = 0;
+        memory[0] = 32'b00000000001001000000000000000000;  // add R2,R0,R1
+        memory[1] = 32'b00000000001001100000000000000110;   // sla R3,R0,R1
+        memory[2] = 32'b11111111111111111111111111111111;   // terminate
     end
 
 
 // state transition logic
+ // change state based on the current state
+
 always @(posedge clk)
 begin
     if(rst)
@@ -201,10 +211,12 @@ begin
                 IR = memory[PC];
                 NPC = PC + 1;
                 state = DECODE;
+                $display("State : FETCH");
             end
 
         DECODE :
             begin
+                $display("State : DECODE");
                 case(opcode)
                     3'b000 : begin                                                         // ALU instruction 
                                 funct = IR[4:0];
@@ -212,6 +224,7 @@ begin
                                 rt = IR[24:21];
                                 rd = IR[20:17];
                                 Imm1 = IR[20:5];
+
                                 // sign extend imm1 and store in immediate
                                 if(Imm1[15] == 1)
                                     Immediate = {16'b1111111111111111,Imm1};
@@ -223,8 +236,12 @@ begin
                                 read_port_2 = 1;
                                 addr_port_1 = rs;
                                 addr_port_2 = rt;
+
+                                $display("rs: %b , rt: %b , rd: %b",rs,rt,rd);
+                                $display("addr_port_1: %b , addr_port_2: %b",addr_port_1,addr_port_2);
                                 A = dout_port_1;
                                 B = dout_port_2;
+                                $display("dout_port_1: %b , dout_port_2: %b",dout_port_1,dout_port_2);
                                 // setting write port to 0
                                 write_port = 0;
                                 addr_port_write = 0;
