@@ -26,12 +26,13 @@ endmodule
 
 module addr_decoder_5x32
 (
+    input clk,
     input en,
     input [3:0] in,
     output reg [15:0] out
 );
 
-always @(*) begin
+always @(posedge clk) begin
     if (en) begin
         case (in)
             4'b0000 : out <= {15'b0, 1'b1};
@@ -52,7 +53,11 @@ always @(*) begin
             4'b1111 : out <= { 1'b1, 15'b0};
         endcase
     end
-    else out <= 16'b0;
+    else 
+        begin   
+            out <= 16'bz;
+        end
+
 end
 
 endmodule
@@ -69,9 +74,10 @@ module register_bank #(parameter ADDR_WIDTH = 4, WIDTH = 32)
 
 wire [15:0] rin, rout1, rout2;
 
-addr_decoder_5x32 D1 (read_port_1, addr_port_1, rout1);
-addr_decoder_5x32 D2 (read_port_2, addr_port_2, rout2);
-addr_decoder_5x32 D3 (write_port, addr_port_write, rin);
+addr_decoder_5x32 D1 (clk,read_port_1, addr_port_1, rout1);
+addr_decoder_5x32 D2 (clk,read_port_2, addr_port_2, rout2);
+addr_decoder_5x32 D3 (clk,write_port, addr_port_write, rin);
+
 
 register R0 (clk, rin[0], rout1[0], rout2[0], din_port_write, dout_port_1, dout_port_2);
 register R1 (clk, rin[1], rout1[1], rout2[1], din_port_write, dout_port_1, dout_port_2);
@@ -90,4 +96,7 @@ register R13 (clk, rin[13], rout1[13], rout2[13], din_port_write, dout_port_1, d
 register R14 (clk, rin[14], rout1[14], rout2[14], din_port_write, dout_port_1, dout_port_2);
 register R15 (clk, rin[15], rout1[15], rout2[15], din_port_write, dout_port_1, dout_port_2);
 
+always @(posedge clk) begin
+    $display("D1.out: %b, D2.out: %b, D3.out: %b", D1.out, D2.out, D3.out);
+end
 endmodule

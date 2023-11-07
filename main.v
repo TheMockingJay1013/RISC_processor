@@ -140,7 +140,7 @@ wire [WIDTH-1:0] op1, op2;
 reg [3:0] alu_op;
 wire [WIDTH-1:0] result;
 
-ALUtoplevel DUTALU(clk2, op1, op2, alu_op, result );
+ALUtoplevel DUTALU(clk, op1, op2, alu_op, result );
 
 //register for storing ALU result 
 reg [WIDTH-1:0] ALU_out;
@@ -191,6 +191,8 @@ initial
         memory[0] = 32'b00000000001001000000000000000000;  // add R2,R0,R1
         memory[1] = 32'b00000000001001100000000000000110;   // sla R3,R0,R1
         memory[2] = 32'b11111111111111111111111111111111;   // terminate
+        read_port_1 = 0;
+        read_port_2 = 0;
     end
 
 
@@ -204,6 +206,7 @@ begin
             state = FETCH;
             PC = 0;
         end
+    else begin
     case(state)
         FETCH : 
             begin
@@ -234,17 +237,22 @@ begin
                                 //accesing data from register bank
                                 read_port_1 = 1;
                                 read_port_2 = 1;
+                                write_port = 1;
                                 addr_port_1 = rs;
-                                addr_port_2 = rt;
+                                addr_port_2 = (funct[4])?4'bz:rt;
+                                addr_port_write = (funct[4])?rt:rd;
 
-                                $display("rs: %b , rt: %b , rd: %b",rs,rt,rd);
-                                $display("addr_port_1: %b , addr_port_2: %b",addr_port_1,addr_port_2);
+                                $display("RB.D1.out : %b, RB.D2.out = %b",RB.D1.out,RB.D2.out);
+                                $display("RB.read_port_1 : %d, RB.read_port_2 = %d",RB.read_port_1,RB.read_port_2);
+                                $display("RB.addr_port_1 : %d, RB.addr_port_2 = %d",RB.addr_port_1,RB.addr_port_2);
+                                $display("RB.dout_port_1 : %d, RB.dout_port_2 = %d",RB.dout_port_1,RB.dout_port_2);
+                                $display("RB.D1.en : %d, RB.D2.en = %d",RB.D1.en,RB.D2.en);
+
+
+                                
                                 A = dout_port_1;
                                 B = dout_port_2;
-                                $display("dout_port_1: %b , dout_port_2: %b",dout_port_1,dout_port_2);
-                                // setting write port to 0
-                                write_port = 0;
-                                addr_port_write = 0;
+
 
                                 MUXALU1_sel = 0;
                                 MUXALU2_sel = funct[4];
@@ -355,12 +363,12 @@ begin
             end
         EXECUTE :
             begin
-                read_port_1 = 0;
-                read_port_2 = 0;
+                $display("State : EXECUTE");
                 case(opcode)
                     3'b000 :
                         begin
                             ALU_out = result;
+                            $display("ALU_out : %d",ALU_out);
                         end
 
                     3'b001 :
@@ -398,6 +406,7 @@ begin
         
         MEMORY :
             begin
+                $display("State : MEMORY");
                 case(opcode)
                     3'b000 :
                         begin
@@ -464,6 +473,7 @@ begin
             end
         WRITEBACK :
             begin
+                $display("State : WRITEBACK");
                 case(opcode)
                     3'b000 :
                         begin
@@ -506,9 +516,11 @@ begin
             end
         TERMINATION :
             begin
+                $display("State : TERMINATION");
                 state = TERMINATION;
             end
     endcase
+    end
 end
 
 
