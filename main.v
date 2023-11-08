@@ -553,7 +553,6 @@ begin
             end
         TERMINATION :
             begin
-                $display("State : TERMINATION");
                 state = TERMINATION;
             end
     endcase
