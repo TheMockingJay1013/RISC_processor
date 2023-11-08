@@ -188,12 +188,12 @@ initial
         clk2 = 0;
         state = FETCH;
         PC = 0;
-        memory[0] = 32'b00011111111011100000000000000000;   // random instr
-        // memory[1] = 32'b00011101110011000000000000000000;   // random instr
+        memory[0] = 32'b00011111111011100000000000000000;   // random instr bcz of weird bug
         memory[1] = 32'b00000000001001000000000000000001;  // sub R2,R0,R1
         memory[2] = 32'b00000000001001100000000000000110;   // sla R3,R0,R1
-        memory[3] = 32'b00000000000010000000000000000100;   // xor R4,R0,R0
-        memory[4] = 32'b11111111111111111111111111111111;   // terminate
+        memory[3] = 32'b00000000010000000000000010011000;   // addi R2,R0,4
+        memory[4] = 32'b00100000010000000000000000000001;   // ST R2,0(R0)
+        memory[5] = 32'b11111111111111111111111111111111;   // terminate
         read_port_1 = 0;
         read_port_2 = 0;
     end
@@ -219,30 +219,6 @@ begin
                 NPC = PC + 1;
                 state = DECODE;
                 $display("State : FETCH");
-                // case(opcode)
-                //     3'b000:
-                //         begin
-                //             funct = IR[4:0];
-                //                 rs = IR[28:25];
-                //                 rt = IR[24:21];
-                //                 rd = IR[20:17];
-                //                 Imm1 = IR[20:5];
-
-                //                 // sign extend imm1 and store in immediate
-                //                 if(Imm1[15] == 1)
-                //                     Immediate = {16'b1111111111111111,Imm1};
-                //                 else
-                //                     Immediate = {16'b0000000000000000,Imm1};
-                                
-                //                 //accesing data from register bank
-                //                 read_port_1 = 1;
-                //                 read_port_2 = 1;
-                //                 // write_port = 1;
-                //                 addr_port_1 = rs;
-                //                 addr_port_2 = (funct[4])?4'bz:rt;
-                //                 addr_port_write = (funct[4])?rt:rd;
-                //         end
-                // endcase
             end
 
         DECODE :
@@ -263,11 +239,11 @@ begin
                                     Immediate = {16'b0000000000000000,Imm1};
                                 
                                 //accesing data from register bank
-                                read_port_1 = 1;
-                                read_port_2 = 1;
                                 // write_port = 1;
                                 addr_port_1 = rs;
                                 addr_port_2 = (funct[4])?4'bz:rt;
+                                read_port_1 = 1;
+                                read_port_2 = 1;
                                 addr_port_write = (funct[4])?rt:rd;
                                 alu_op = funct[2:0] ;
                                 MUXALU1_sel = 0;
@@ -280,8 +256,11 @@ begin
                                 // $display("RB.D1.en : %d, RB.D2.en = %d",RB.D1.en,RB.D2.en);
 
                                 // $display("dout_port_1 : %d, dout_port_2 = %d",dout_port_1,dout_port_2);
+
                                 A= dout_port_1;
                                 B = dout_port_2;
+
+                                
                             end
                     3'b001 :                                                              // load store instruction 
                         begin
@@ -295,14 +274,18 @@ begin
                                 Immediate = {16'b0000000000000000,Imm1};
 
                             // accessing from reg bank 
+                            addr_port_1 = rs ;
+                            addr_port_2 = rt ;
                             read_port_1 = 1 ;
                             read_port_2 = 1 ;
-                            addr_port_1 = rs ;
-                            A = (funct[2]==0) ? dout_port_1 : SP ;
-                            B =(funct[2]==0) ? dout_port_2 : SP ;
+                            $display("addr_port_1 : %d, addr_port_2 = %d",addr_port_1,addr_port_2);
+                            addr_port_write = rt ;
+                            alu_op = 0 ;
                             MUXALU1_sel = 0;
                             MUXALU2_sel = 1;
-                            alu_op = 0 ;
+
+
+                           
 
                         end
                     3'b010 :                                                          // branch instr
@@ -392,8 +375,6 @@ begin
                 case(opcode)
                     3'b000 :
                         begin
-                        
-    
                             ALU_out = result;
                             din_port_write = ALU_out;
                             write_port = 1;
@@ -402,6 +383,9 @@ begin
 
                     3'b001 :
                         begin
+                            A = (funct[2]==0) ? dout_port_1 : SP ;
+                            B =(funct[2]==0) ? dout_port_2 : SP ;
+                            $display("A : %d, B = %d , DUTALU.result = %d",A,B,DUTALU.result);
                             ALU_out = result ;
                         end
 
@@ -513,16 +497,15 @@ begin
                             case(funct[1:0])
                                 2'b00 : 
                                     begin
-                                        write_port = 1 ;
-                                        addr_port_write = rt ;
+                                        
                                         din_port_write = LMD ;
+                                        write_port = 1 ;
                                     end
 
                                 2'b10 : 
                                     begin
-                                        write_port =1 ;
-                                        addr_port_write = rt ;
                                         din_port_write = LMD ;
+                                        write_port =1 ;
                                     end
                             endcase
 
@@ -530,9 +513,9 @@ begin
                     
                     3'b100 :
                         begin
-                            write_port = 1;
                             addr_port_write = rt ;
                             din_port_write = ALU_out;
+                            write_port = 1;
                         end
                     3'b110 :
                         begin
