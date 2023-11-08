@@ -55,10 +55,10 @@ reg [22:0] Imm2;
 reg [3:0] rs,rt,rd ;
 
 
-wire [2:0] opcode; 
+reg [2:0] opcode; 
 
 // opcode is the first 3 bits of IR
-assign opcode = IR[31:29];
+
 
 
 
@@ -140,7 +140,7 @@ wire [WIDTH-1:0] op1, op2;
 reg [3:0] alu_op;
 wire [WIDTH-1:0] result;
 
-ALUtoplevel DUTALU(clk, op1, op2, alu_op, result );
+ALUtoplevel DUTALU(clk2, op1, op2, alu_op, result );
 
 //register for storing ALU result 
 reg [WIDTH-1:0] ALU_out;
@@ -179,6 +179,8 @@ reg [2:0] state;
 
 /*----------------------------------------------------------------------------------------------------------------*/
 
+
+
 always forever begin
     #5 clk2 = ~clk2;
 end
@@ -188,9 +190,20 @@ initial
         clk2 = 0;
         state = FETCH;
         PC = 0;
-        memory[0] = 32'b00000000001001000000000000000000;  // add R2,R0,R1
-        memory[1] = 32'b00000000001001100000000000000110;   // sla R3,R0,R1
-        memory[2] = 32'b11111111111111111111111111111111;   // terminate
+        SP = 32'b00000000000000000000001111111111;
+        memory[0] = 32'b00011111111011100000000000000000;   // random instr bcz of weird bug
+        // memory[1] = 32'b00011111111011000000000000000000;   // random instr bcz of weird bug
+        memory[1] = 32'b00000000001001000000000000000001;  // sub R2,R0,R1
+        memory[2] = 32'b00000000001001100000000000000110;   // sla R3,R0,R1
+        memory[3] = 32'b00000000010000000000000010011000;   // addi R2,R0,4
+        memory[4] = 32'b00100000010000000000000000000001;   // ST R2,0(R0)
+        memory[5] = 32'b00100000100000000000000000000000;   // LD R4,0(R0)
+        // memory[6] = 32'b10000100000000000000000000000000;   // mov R1,R2
+        // memory[6] = 32'b01000101111111111111111111110110;   // BPL R2,#-3
+        // memory[6] = 32'b01000101111111111111111111110101;   // BMI R2,#-3
+        // memory[6] = 32'b01000001111111111111111111110100;   // BR #-3
+        memory[6] = 32'b11000000000000000000000000110001;      // SUBI SP,#1
+        memory[7] = 32'b11111111111111111111111111111111;   // terminate
         read_port_1 = 0;
         read_port_2 = 0;
     end
@@ -212,14 +225,15 @@ begin
             begin
                 write_port = 0;
                 IR = memory[PC];
+                opcode = IR[31:29];
                 NPC = PC + 1;
                 state = DECODE;
-                $display("State : FETCH");
+                // $display("State : FETCH");
             end
 
         DECODE :
             begin
-                $display("State : DECODE");
+                // $display("State : DECODE");
                 case(opcode)
                     3'b000 : begin                                                         // ALU instruction 
                                 funct = IR[4:0];
@@ -228,6 +242,9 @@ begin
                                 rd = IR[20:17];
                                 Imm1 = IR[20:5];
 
+                                alu_op = funct[2:0] ;
+                                MUXALU1_sel = 0;
+                                MUXALU2_sel = funct[4];
                                 // sign extend imm1 and store in immediate
                                 if(Imm1[15] == 1)
                                     Immediate = {16'b1111111111111111,Imm1};
@@ -235,28 +252,25 @@ begin
                                     Immediate = {16'b0000000000000000,Imm1};
                                 
                                 //accesing data from register bank
-                                read_port_1 = 1;
-                                read_port_2 = 1;
-                                write_port = 1;
+                                // write_port = 1;
                                 addr_port_1 = rs;
                                 addr_port_2 = (funct[4])?4'bz:rt;
+                                read_port_1 = 1;
+                                read_port_2 = 1;
                                 addr_port_write = (funct[4])?rt:rd;
 
-                                $display("RB.D1.out : %b, RB.D2.out = %b",RB.D1.out,RB.D2.out);
-                                $display("RB.read_port_1 : %d, RB.read_port_2 = %d",RB.read_port_1,RB.read_port_2);
-                                $display("RB.addr_port_1 : %d, RB.addr_port_2 = %d",RB.addr_port_1,RB.addr_port_2);
-                                $display("RB.dout_port_1 : %d, RB.dout_port_2 = %d",RB.dout_port_1,RB.dout_port_2);
-                                $display("RB.D1.en : %d, RB.D2.en = %d",RB.D1.en,RB.D2.en);
+                                // $display("RB.D1.out : %b, RB.D2.out = %b",RB.D1.out,RB.D2.out);
+                                // $display("RB.read_port_1 : %d, RB.read_port_2 = %d , RB.write_port = %d",RB.read_port_1,RB.read_port_2,RB.write_port);
+                                // $display("RB.addr_port_1 : %d, RB.addr_port_2 = %d , RB.addr_port_write = %d",RB.addr_port_1,RB.addr_port_2,RB.addr_port_write);
+                                // $display("RB.dout_port_1 : %d, RB.dout_port_2 = %d",RB.dout_port_1,RB.dout_port_2);
+                                // $display("RB.D1.en : %d, RB.D2.en = %d",RB.D1.en,RB.D2.en);
 
+                                // $display("dout_port_1 : %d, dout_port_2 = %d",dout_port_1,dout_port_2);
 
-                                
-                                A = dout_port_1;
+                                A= dout_port_1;
                                 B = dout_port_2;
 
-
-                                MUXALU1_sel = 0;
-                                MUXALU2_sel = funct[4];
-                                alu_op = funct[2:0] ;
+                                
                             end
                     3'b001 :                                                              // load store instruction 
                         begin
@@ -270,14 +284,17 @@ begin
                                 Immediate = {16'b0000000000000000,Imm1};
 
                             // accessing from reg bank 
+                            addr_port_1 = rs ;
+                            addr_port_2 = rt ;
                             read_port_1 = 1 ;
                             read_port_2 = 1 ;
-                            addr_port_1 = rs ;
-                            A = (funct[2]==0) ? dout_port_1 : SP ;
-                            B =(funct[2]==0) ? dout_port_2 : SP ;
+                            addr_port_write = rt ;
+                            alu_op = 0 ;
                             MUXALU1_sel = 0;
                             MUXALU2_sel = 1;
-                            alu_op = 0 ;
+
+
+                           
 
                         end
                     3'b010 :                                                          // branch instr
@@ -292,11 +309,12 @@ begin
 
                             read_port_1 =1;
                             addr_port_1 = rs ;
-                            A = dout_port_1 ;
+                            
 
                             MUXALU1_sel  = 1;
                             MUXALU2_sel = 1 ;
                             alu_op = 0;
+                            cond = funct2 ;
                     
 
                     
@@ -304,6 +322,12 @@ begin
                     3'b011 :                                                      // stack 
                         begin
                             
+                            funct = IR[1:0] ;
+                            Immediate = 32'b0 ;
+
+                            alu_op = 0 ;
+                            MUXALU1_sel = 0;
+                            MUXALU2_sel = 1;
 
                         end
                     
@@ -312,12 +336,12 @@ begin
                             rs = IR[28:25];
                             rt = IR[24:21];
 
-                            Immediate = 0;
+                            Immediate = 32'b0;
 
-                            read_port_1 =1 ;
                             addr_port_1 = rs ;
+                            read_port_1 =1 ;
 
-                            A = dout_port_1 ;
+                            addr_port_write = rt ;
 
                             alu_op = 0;
                             MUXALU1_sel = 0;
@@ -344,11 +368,13 @@ begin
                             else
                                 Immediate = {16'b0000000000000000,Imm1};
 
-                            A = SP ;
+                            
 
+                            alu_op = funct[3:0] ;
                             MUXALU1_sel = 0;
                             MUXALU2_sel = 1;
-                            alu_op = funct[3:0] ;
+                            
+
                         end
                     3'b111 :
                         begin
@@ -357,45 +383,54 @@ begin
 
                 endcase
 
-                state = EXECUTE;
-                if(opcode == 3'b101 && program_control_op == 1 && halt_button == 1)
-                    state = DECODE;
+                if(opcode == 3'b101 && program_control_op == 0 && halt_button == 1) state = DECODE;
+                else if(opcode == 3'b111) state = TERMINATION;
+                else state = EXECUTE;
             end
         EXECUTE :
             begin
-                $display("State : EXECUTE");
+                // $display("State : EXECUTE");
                 case(opcode)
                     3'b000 :
                         begin
                             ALU_out = result;
-                            $display("ALU_out : %d",ALU_out);
+                            din_port_write = ALU_out;
+                            write_port = 1;
+
                         end
 
                     3'b001 :
                         begin
+                            A = (funct[2:0]==3'b101) ? SP : dout_port_1;
+                            B =(funct[3:0]==4'b0011) ? SP : dout_port_2 ;
+                            if(funct[3:0] == 4'b1101) B = NPC ;
                             ALU_out = result ;
                         end
 
                     3'b010 :
                         begin
+                            A = dout_port_1 ;
                             ALU_out = result ;
-                            cond = funct2 ;
+                            // cond = funct2 ;
 
 
                         end
                     3'b011:
                         begin
-                            
+                            A = SP ;
+                            ALU_out = result ;
                         end
                     
                     3'b100 :
                         begin
-                            ALU_out = result;
+                            A = dout_port_1 ;
+                            
                         end
                     
                     3'b110 :
                         begin
-                            ALU_out = result;
+                            A = SP ;
+                            
                         end
 
 
@@ -406,7 +441,7 @@ begin
         
         MEMORY :
             begin
-                $display("State : MEMORY");
+                // $display("State : MEMORY");
                 case(opcode)
                     3'b000 :
                         begin
@@ -450,12 +485,14 @@ begin
                         end
                     3'b011:
                         begin
-
+                            PC = data_memory[ALU_out];
                         end
                     
                     3'b100 :
                         begin
                             PC = NPC;
+                            ALU_out = result;
+                            din_port_write = ALU_out;
                         end
                     
                     3'b101 :
@@ -466,6 +503,7 @@ begin
                     3'b110 :
                         begin
                             PC = NPC;
+                            ALU_out = result;
                         end
                     
                 endcase
@@ -473,12 +511,10 @@ begin
             end
         WRITEBACK :
             begin
-                $display("State : WRITEBACK");
+                // $display("State : WRITEBACK");
                 case(opcode)
                     3'b000 :
                         begin
-                            write_port = 1;
-                            addr_port_write = (funct[4])? rt : rd;
                             din_port_write = ALU_out;
                         end
                     3'b001:
@@ -486,26 +522,27 @@ begin
                             case(funct[1:0])
                                 2'b00 : 
                                     begin
-                                        write_port =1 ;
-                                        addr_port_write = rt ;
+                                        
                                         din_port_write = LMD ;
+                                        write_port = 1 ;
                                     end
 
                                 2'b10 : 
                                     begin
-                                        write_port =1 ;
-                                        addr_port_write = rt ;
                                         din_port_write = LMD ;
+                                        write_port =1 ;
                                     end
                             endcase
+
+                        end
+                    3'b010 :
+                        begin
 
                         end
                     
                     3'b100 :
                         begin
                             write_port = 1;
-                            addr_port_write = rt ;
-                            din_port_write = ALU_out;
                         end
                     3'b110 :
                         begin
@@ -516,7 +553,6 @@ begin
             end
         TERMINATION :
             begin
-                $display("State : TERMINATION");
                 state = TERMINATION;
             end
     endcase
