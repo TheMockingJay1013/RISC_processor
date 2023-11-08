@@ -96,5 +96,4 @@ register R13 (clk, rin[13], rout1[13], rout2[13], din_port_write, dout_port_1, d
 register R14 (clk, rin[14], rout1[14], rout2[14], din_port_write, dout_port_1, dout_port_2);
 register R15 (clk, rin[15], rout1[15], rout2[15], din_port_write, dout_port_1, dout_port_2);
 
-
 endmodule
