@@ -18,7 +18,7 @@ initial begin
     #100 rst=1;
     #100 rst=0;
     halt_button=0;
-    #12000 $finish;
+    #2000000 $finish;
 end
 
 endmodule
