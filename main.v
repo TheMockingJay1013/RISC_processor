@@ -181,6 +181,7 @@ reg [2:0] state;
 
 
 
+
 always forever begin
     #5 clk2 = ~clk2;
 end
@@ -191,19 +192,36 @@ initial
         state = FETCH;
         PC = 0;
         SP = 32'b00000000000000000000001111111111;
-        memory[0] = 32'b00011111111011100000000000000000;   // random instr bcz of weird bug
-        // memory[1] = 32'b00011111111011000000000000000000;   // random instr bcz of weird bug
-        memory[1] = 32'b00000000001001000000000000000001;  // sub R2,R0,R1
-        memory[2] = 32'b00000000001001100000000000000110;   // sla R3,R0,R1
-        memory[3] = 32'b00000000010000000000000010011000;   // addi R2,R0,4
-        memory[4] = 32'b00100000010000000000000000000001;   // ST R2,0(R0)
-        memory[5] = 32'b00100000100000000000000000000000;   // LD R4,0(R0)
-        // memory[6] = 32'b10000100000000000000000000000000;   // mov R1,R2
-        // memory[6] = 32'b01000101111111111111111111110110;   // BPL R2,#-3
-        // memory[6] = 32'b01000101111111111111111111110101;   // BMI R2,#-3
-        // memory[6] = 32'b01000001111111111111111111110100;   // BR #-3
-        memory[6] = 32'b11000000000000000000000000110001;      // SUBI SP,#1
-        memory[7] = 32'b11111111111111111111111111111111;   // terminate
+        memory[0] = 32'b00011111111101100000000000000000;   // random instr bcz of weird bug
+        // // memory[1] = 32'b00011111111011000000000000000000;   // random instr bcz of weird bug
+        // memory[1] = 32'b00000000001001000000000000000001;  // sub R2,R0,R1
+        // memory[2] = 32'b00000000001001100000000000000110;   // sla R3,R0,R1
+        // memory[3] = 32'b00000000010000000000000010011000;   // addi R2,R0,4
+        // memory[4] = 32'b00100000010000000000000000000001;   // ST R2,0(R0)
+        // memory[5] = 32'b00100000100000000000000000000000;   // LD R4,0(R0)
+        // // memory[6] = 32'b10000100000000000000000000000000;   // mov R1,R2
+        // // memory[6] = 32'b01000101111111111111111111110110;   // BPL R2,#-3
+        // // memory[6] = 32'b01000101111111111111111111110101;   // BMI R2,#-3
+        // // memory[6] = 32'b01000001111111111111111111110100;   // BR #-3
+        // memory[6] = 32'b11000000000000000000000000110001;      // SUBI SP,#1
+        // memory[7] = 32'b11111111111111111111111111111111;   // terminate
+
+
+        // GCD code
+        memory[1] = {11'b00001100000, 16'b0000000000110100, 5'b10000};       // addi R0,R6,4
+        memory[2] = {11'b00001100001, 16'b0000000000001101, 5'b10000};       // addi R1,R6,2   
+        memory[3] = 32'b00000000001010100000000000000001;       // sub R5,R0,R1  
+        memory[4] = 32'b01001010000000000000000000101011;       // beq R5 #10
+        memory[5] = 32'b01001010000000000000000000001010;       // bgt R5 #2     
+        memory[6] = 32'b01001010000000000000000000010001;       // blt R5 #4
+        memory[7] = 32'b00000000001011000000000000000001;       // sub R6,R0,R1 
+        memory[8] = 32'b10001100000000000000000000000000;       // mov R0,R6
+        memory[9] = 32'b01011111111111111111111111101000;       // br #-6
+        memory[10] =32'b10000000010000000000000000000000;       // mov R2,R0
+        memory[11] =32'b10000010000000000000000000000000;       // mov R0,R1
+        memory[12] =32'b10000100001000000000000000000000;       // moc R1,R2
+        memory[13] =32'b01011111111111111111111111011000;       // br -10
+        memory[14] =32'b11111111111111111111111111111111;       // terminate
         read_port_1 = 0;
         read_port_2 = 0;
     end
@@ -259,16 +277,6 @@ begin
                                 read_port_2 = 1;
                                 addr_port_write = (funct[4])?rt:rd;
 
-                                // $display("RB.D1.out : %b, RB.D2.out = %b",RB.D1.out,RB.D2.out);
-                                // $display("RB.read_port_1 : %d, RB.read_port_2 = %d , RB.write_port = %d",RB.read_port_1,RB.read_port_2,RB.write_port);
-                                // $display("RB.addr_port_1 : %d, RB.addr_port_2 = %d , RB.addr_port_write = %d",RB.addr_port_1,RB.addr_port_2,RB.addr_port_write);
-                                // $display("RB.dout_port_1 : %d, RB.dout_port_2 = %d",RB.dout_port_1,RB.dout_port_2);
-                                // $display("RB.D1.en : %d, RB.D2.en = %d",RB.D1.en,RB.D2.en);
-
-                                // $display("dout_port_1 : %d, dout_port_2 = %d",dout_port_1,dout_port_2);
-
-                                A= dout_port_1;
-                                B = dout_port_2;
 
                                 
                             end
@@ -307,7 +315,7 @@ begin
                             else
                                 Immediate = {9'b000000000,Imm2};
 
-                            read_port_1 =1;
+                            read_port_1 = 1;
                             addr_port_1 = rs ;
                             
 
@@ -393,9 +401,11 @@ begin
                 case(opcode)
                     3'b000 :
                         begin
-                            ALU_out = result;
-                            din_port_write = ALU_out;
-                            write_port = 1;
+                            A= dout_port_1;
+                            B = dout_port_2;
+                            // ALU_out = result;
+                            // din_port_write = ALU_out;
+                            
 
                         end
 
@@ -446,6 +456,9 @@ begin
                     3'b000 :
                         begin
                             PC = NPC;
+                            ALU_out = result;
+                            din_port_write = ALU_out;
+                            write_port = 1;
                         end
                     
                     3'b001 :
@@ -516,6 +529,7 @@ begin
                     3'b000 :
                         begin
                             din_port_write = ALU_out;
+                            
                         end
                     3'b001:
                         begin

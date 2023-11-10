@@ -19,7 +19,7 @@ always @(posedge clk) begin
 end
 
 initial begin
-    data <= 1;
+    data <= 0;
 end
 
 endmodule

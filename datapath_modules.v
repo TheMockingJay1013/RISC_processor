@@ -21,7 +21,7 @@ module condition_check #(parameter width = 32)
 
 parameter less = 1 , equal = 3 , greater = 2 ;
 
-assign outp = (cond==0)? 1:(cond == less) ? (A < 0) : (cond == equal) ? (A == 0) : (A > 0) ;
+assign outp = (cond==0)? 1:(cond == less) ? (A[width-1] == 1) : (cond == equal) ? (A == 0) : (A[width-1] == 0) ;
 
 
 endmodule
